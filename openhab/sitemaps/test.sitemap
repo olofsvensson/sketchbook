@@ -1,0 +1,17 @@
+sitemap demo label="Test"
+{
+	Frame label="Led" {
+		Switch item=ledSwitch
+	}
+        Frame label="Saloon" {
+            Text item=Temp
+            Text item=Humi
+        }
+        Frame label="Alex" {
+            Text item=Temp2
+            Text item=Humi2
+        }
+        Frame label="All temperatures" {
+            Chart item=AllTemp period=D refresh=60000
+        }
+}
