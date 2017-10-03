@@ -46,6 +46,8 @@ struct payload_t {                  // Structure of our payload
   char message[32];
 };
 
+payload_t payload;
+
 void setup() {
 
   radio.setPayloadSize(72);
@@ -58,6 +60,35 @@ void setup() {
   mesh.begin();
 }
 
+void sendTopicAndMessage(String topic, String message) {
+  payload.nodeId = 1;
+  payload.topic_length = topic.length();
+  payload.message_length = message.length();
+  topic.toCharArray(payload.topic, topic.length()+1);
+  message.toCharArray(payload.message, message.length()+1);
+  Serial.println(payload.nodeId);
+  Serial.println(payload.topic_length);
+  Serial.println(payload.topic);
+  Serial.println(payload.message_length);
+  Serial.println(payload.message);
+  Serial.println(sizeof(payload));
+  Serial.println(F("Sending...\r\n"));
+  // Send an 'D' type message containing the current millis()
+  if (!mesh.write(&payload, 'D', sizeof(payload))) {
+    // If a write fails, check connectivity to the mesh network
+    if ( ! mesh.checkConnection() ) {
+      //refresh the network address
+      Serial.println("Renewing Address");
+      mesh.renewAddress();
+    } else {
+      Serial.println("Send fail, Test OK");
+    }
+  } else {
+    Serial.print("Send OK: "); Serial.println(displayTimer);
+  }
+}
+
+
 float hum;  //Stores humidity value
 float temp; //Stores temperature value
 const float voltage_reference = 3.7; // 5.0V
@@ -66,6 +97,7 @@ const int voltage_pin = A0;
 float voltage_reading;
 unsigned int i, reading;
 unsigned long thisNode = 1;
+String topic, message;
 
 static char hum_string[15];
 static char temp_string[15];
@@ -91,72 +123,16 @@ void loop() {
       reading += analogRead(voltage_pin);
  
     voltage_reading = (float)reading / num_measurements * voltage_reference / 512.0;
-    //Serial.println(voltage_reading);
-    //Serial.println(temp_string);
-    //Serial.println(hum_string);
-    //Serial.println(F("Sending...\r\n"));
-    unsigned long length = 4;
     
-    payload_t payload;
-    payload.nodeId = 1;
-    String topic = "saloon/temperature";
-    String message = String(temp_string);
-    payload.topic_length = topic.length();
-    payload.message_length = message.length();
-    topic.toCharArray(payload.topic, topic.length()+1);
-    message.toCharArray(payload.message, message.length()+1);
-    Serial.println(payload.nodeId);
-    Serial.println(payload.topic_length);
-    Serial.println(payload.topic);
-    Serial.println(payload.message_length);
-    Serial.println(payload.message);
-    Serial.println(sizeof(payload));
-    Serial.println(F("Sending...\r\n"));
-    // Send an 'D' type message containing the current millis()
-    if (!mesh.write(&payload, 'D', sizeof(payload))) {
+    topic = "saloon/temperature";
+    message = String(temp_string);
+    sendTopicAndMessage(topic, message);
 
-      // If a write fails, check connectivity to the mesh network
-      if ( ! mesh.checkConnection() ) {
-        //refresh the network address
-        Serial.println("Renewing Address");
-        mesh.renewAddress();
-      } else {
-        Serial.println("Send fail, Test OK");
-      }
-    } else {
-      Serial.print("Send OK: "); Serial.println(displayTimer);
-    }
-    payload.nodeId = 1;
     topic = "saloon/humidity";
     message = String(hum_string);
-    payload.topic_length = topic.length();
-    payload.message_length = message.length();
-    topic.toCharArray(payload.topic, topic.length()+1);
-    message.toCharArray(payload.message, message.length()+1);
-    Serial.println(payload.nodeId);
-    Serial.println(payload.topic_length);
-    Serial.println(payload.topic);
-    Serial.println(payload.message_length);
-    Serial.println(payload.message);
-    Serial.println(sizeof(payload));
-    Serial.println(F("Sending...\r\n"));
-    // Send an 'D' type message containing the current millis()
-    if (!mesh.write(&payload, 'D', sizeof(payload))) {
+    sendTopicAndMessage(topic, message);
 
-      // If a write fails, check connectivity to the mesh network
-      if ( ! mesh.checkConnection() ) {
-        //refresh the network address
-        Serial.println("Renewing Address");
-        mesh.renewAddress();
-      } else {
-        Serial.println("Send fail, Test OK");
-      }
-    } else {
-      Serial.print("Send OK: "); Serial.println(displayTimer);
-    }
   }
-
-  
 }
 
 
