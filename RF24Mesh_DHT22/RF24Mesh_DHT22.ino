@@ -33,7 +33,9 @@ RF24Mesh mesh(radio, network);
    This will be stored in EEPROM on AVR devices, so remains persistent between further uploads, loss of power, etc.
 
  **/
-#define nodeID 1
+#define nodeID 4
+
+int led = 4;
 
 
 uint32_t displayTimer = 0;
@@ -49,6 +51,7 @@ struct payload_t {                  // Structure of our payload
 payload_t payload;
 
 void setup() {
+  pinMode(led, OUTPUT);     
 
   radio.setPayloadSize(72);
   Serial.begin(115200);
@@ -133,6 +136,21 @@ void loop() {
     sendTopicAndMessage(topic, message);
 
   }
+  
+  if (network.available()) {
+    RF24NetworkHeader header;
+    payload_t payload;
+    network.read(header, &payload, sizeof(payload));
+    Serial.println("Received packet #");
+    Serial.println(payload.topic);
+    Serial.println(payload.message);
+    if (String(payload.message).equals("ON")) {
+      digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
+    } else if (String(payload.message).equals("OFF")) {
+      digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+    }
+  }
+  
 }
 
 
