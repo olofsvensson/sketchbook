@@ -13,7 +13,8 @@
 #include "RF24Mesh.h"
 #include <SPI.h>
 #include <DHT.h>
-//#include <printf.h>
+
+/*** DHT 22 config */
 
 #define DHTPIN 3     // what pin we're connected to
 #define DHTTYPE DHT22   // DHT 22  (AM2302)
@@ -31,19 +32,19 @@ RF24Mesh mesh(radio, network);
    In this example, configuration takes place below, prior to uploading the sketch to the device
    A unique value from 1-255 must be configured for each node.
    This will be stored in EEPROM on AVR devices, so remains persistent between further uploads, loss of power, etc.
-
  **/
 #define nodeID 4
 
+
+/*** Led pin */
 int led = 4;
 
-
+/*** Timer for sending new values */
 uint32_t displayTimer = 0;
 
-struct payload_t {                  // Structure of our payload
+/*** Message structure */
+struct payload_t { 
   unsigned long nodeId;
-  unsigned long topic_length;
-  unsigned long message_length;
   char topic[32];
   char message[32];
 };
@@ -51,11 +52,11 @@ struct payload_t {                  // Structure of our payload
 payload_t payload;
 
 void setup() {
+  // Set up the led pin
   pinMode(led, OUTPUT);     
-
+  // Increase the payload size from default 32 to 72
   radio.setPayloadSize(72);
   Serial.begin(115200);
-  //printf_begin();
   // Set the nodeID manually
   mesh.setNodeID(nodeID);
   // Connect to the mesh
@@ -64,15 +65,11 @@ void setup() {
 }
 
 void sendTopicAndMessage(String topic, String message) {
-  payload.nodeId = 1;
-  payload.topic_length = topic.length();
-  payload.message_length = message.length();
+  payload.nodeId = nodeID;
   topic.toCharArray(payload.topic, topic.length()+1);
   message.toCharArray(payload.message, message.length()+1);
   Serial.println(payload.nodeId);
-  Serial.println(payload.topic_length);
   Serial.println(payload.topic);
-  Serial.println(payload.message_length);
   Serial.println(payload.message);
   Serial.println(sizeof(payload));
   Serial.println(F("Sending...\r\n"));
@@ -127,11 +124,11 @@ void loop() {
  
     voltage_reading = (float)reading / num_measurements * voltage_reference / 512.0;
     
-    topic = "saloon/temperature";
+    topic = "temperature";
     message = String(temp_string);
     sendTopicAndMessage(topic, message);
 
-    topic = "saloon/humidity";
+    topic = "humidity";
     message = String(hum_string);
     sendTopicAndMessage(topic, message);
 
@@ -144,10 +141,12 @@ void loop() {
     Serial.println("Received packet #");
     Serial.println(payload.topic);
     Serial.println(payload.message);
-    if (String(payload.message).equals("ON")) {
-      digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
-    } else if (String(payload.message).equals("OFF")) {
-      digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+    if (String(payload.topic).equals("Led")) {
+      if (String(payload.message).equals("ON")) {
+        digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
+      } else if (String(payload.message).equals("OFF")) {
+        digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+      }
     }
   }
   
