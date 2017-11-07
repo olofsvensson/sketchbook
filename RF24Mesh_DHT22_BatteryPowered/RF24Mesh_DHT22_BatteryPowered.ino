@@ -35,7 +35,7 @@ RF24Mesh mesh(radio, network);
    A unique value from 1-255 must be configured for each node.
    This will be stored in EEPROM on AVR devices, so remains persistent between further uploads, loss of power, etc.
  **/
-#define nodeID 4
+#define nodeID 5
 
 /*** Led pin */
 int led = 4;
@@ -103,6 +103,33 @@ String topic, message;
 static char hum_string[15];
 static char temp_string[15];
 
+long readVcc() {
+  // From: https://provideyourown.com/2012/secret-arduino-voltmeter-measure-battery-voltage/
+  // Read 1.1V reference against AVcc
+  // set the reference to Vcc and the measurement to the internal 1.1V reference
+  #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
+    ADMUX = _BV(MUX5) | _BV(MUX0);
+  #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
+    ADMUX = _BV(MUX3) | _BV(MUX2);
+  #else
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  #endif  
+
+  delay(2); // Wait for Vref to settle
+  ADCSRA |= _BV(ADSC); // Start conversion
+  while (bit_is_set(ADCSRA,ADSC)); // measuring
+
+  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH  
+  uint8_t high = ADCH; // unlocks both
+
+  long result = (high<<8) | low;
+
+  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
+  return result; // Vcc in millivolts
+}
+
 void loop() {
 
   mesh.update();
@@ -130,27 +157,20 @@ void loop() {
     topic = "humidity";
     message = String(hum_string);
     sendTopicAndMessage(topic, message);
-  
-  if (network.available()) {
-    RF24NetworkHeader header;
-    payload_t payload;
-    network.read(header, &payload, sizeof(payload));
-    Serial.println("Received packet #");
-    Serial.println(payload.topic);
-    Serial.println(payload.message);
-    if (String(payload.topic).equals("arduino/Led")) {
-      if (String(payload.message).equals("ON")) {
-        digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level)
-      } else if (String(payload.message).equals("OFF")) {
-        digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
-      }
-    }
-  }
 
-  // Power down for 16 s
+    topic = "battery";
+    message = String(readVcc()/1000.0);
+    sendTopicAndMessage(topic, message); 
+
+  // Power down for 30 s
+  radio.powerDown();
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
-  delay(1000);               // wait for a second
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
+  LowPower.powerDown(SLEEP_4S, ADC_OFF, BOD_OFF);  
+  LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
+  radio.powerUp();
+  delay(1000); // wait for a second for things to restore
 
 }
 
