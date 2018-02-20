@@ -16,7 +16,6 @@
 #include <stdio.h>
 #include <mosquitto.h>
 #include <stdlib.h>
-#include <string.h>
 #include <unistd.h>
 
 #include "RF24Mesh/RF24Mesh.h"  
@@ -30,10 +29,8 @@ RF24Mesh mesh(radio,network);
 
 struct payload_t {                  // Structure of our payload
   unsigned long nodeId;
-  unsigned long topic_length;
-  unsigned long message_length;
-  char topic[32];
-  char message[32];
+  char topic[12];
+  char message[12];
 };
 
 
@@ -54,6 +51,28 @@ void mosq_log_callback(struct mosquitto *mosq, void *userdata, int level, const 
 	
 }
 
+void message_callback(struct mosquitto *mosq, void *obj, const struct mosquitto_message *message)
+{
+	bool match = 0;
+	printf("got message '%.*s' for topic '%s'\n", message->payloadlen, (char*) message->payload, message->topic);
+
+        payload_t payload;
+        payload.nodeId = 0;
+        strcpy(payload.topic, message->topic);
+        strcpy(payload.message, (char*) message->payload);
+        mesh.update();
+        if (!mesh.write(&payload, 'D', sizeof(payload), 5)) {
+           printf("Send failed!");
+        } else {
+           printf("Send with success!");
+	}
+	//mosquitto_topic_matches_sub("arduino/saloon/+", message->topic, &match);
+	//if (match) {
+	//	printf("got message for saloon topic\n");
+	//}
+
+}
+
 struct mosquitto *mosq = NULL;
 void mqtt_setup(){
 
@@ -70,11 +89,14 @@ void mqtt_setup(){
 	}
   
   mosquitto_log_callback_set(mosq, mosq_log_callback);
+  mosquitto_message_callback_set(mosq, message_callback);
+
   
   if(mosquitto_connect(mosq, host, port, keepalive)){
 		fprintf(stderr, "Unable to connect.\n");
 		exit(1);
 	}
+  mosquitto_subscribe(mosq, NULL, "arduino/+", 0);
   int loop = mosquitto_loop_start(mosq);
   if(loop != MOSQ_ERR_SUCCESS){
     fprintf(stderr, "Unable to start loop: %i\n", loop);
@@ -91,13 +113,14 @@ int snd;
 int main(int argc, char** argv) {
   
   mqtt_setup();
-  radio.setPayloadSize(72);
+  // radio.setPayloadSize(72);
   // Set the nodeID to 0 for the master node
   mesh.setNodeID(0);
   // Connect to the mesh
   printf("start\n");
   mesh.begin();
   radio.printDetails();
+  char topic[64];
 
 while(1)
 {
@@ -124,9 +147,12 @@ while(1)
                 printf("Rcv %u from 0%o\n",dat,header.from_node);
                  break;
       case 'D': network.read(header,&payload,sizeof(payload)); 
-		printf("Received payload # %d | %d | %s | %d | %s\n",(int)payload.nodeId, \
-                       (int)payload.topic_length, payload.topic, (int)payload.message_length, payload.message);
-                snd = mqtt_send(payload.topic, payload.message);
+		printf("Received payload # %d | %s | %s\n",(int)payload.nodeId, \
+                       payload.topic, payload.message);
+                sprintf(topic, "%lu", payload.nodeId);
+                strcat(topic, "/");
+                strcat(topic, payload.topic);
+                snd = mqtt_send(topic, payload.message);
                 if(snd != 0) printf("mqtt_send error=%i\n", snd);
                 break;
       default:  network.read(header,0,0); 

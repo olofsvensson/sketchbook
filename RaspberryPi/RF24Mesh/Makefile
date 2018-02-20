@@ -30,7 +30,8 @@ CCFLAGS=-Ofast -mfpu=vfp -mfloat-abi=hard -march=$(ARCH) -mtune=arm1176jzf-s -st
 endif
 
 # define all programs
-PROGRAMS = RF24Mesh_Example_Master RF24Mesh_Example
+#PROGRAMS = RF24Mesh_Example_Master RF24Mesh_Example
+PROGRAMS = RF24Mesh_Example_Master
 SOURCES = ${PROGRAMS:=.cpp}
 
 all: ${PROGRAMS}
