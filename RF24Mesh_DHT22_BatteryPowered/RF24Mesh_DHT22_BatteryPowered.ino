@@ -22,6 +22,9 @@
 #define DHTTYPE DHT22   // DHT 22  (AM2302)
 DHT dht(DHTPIN, DHTTYPE); //// Initialize DHT sensor for normal 16mhz Arduino
 
+/*** PIR sensor ***/
+//#define PIRPIN 5
+
 /**** Configure the nrf24l01 CE and CS pins ****/
 RF24 radio(9, 10);
 RF24Network network(radio);
@@ -35,7 +38,7 @@ RF24Mesh mesh(radio, network);
    A unique value from 1-255 must be configured for each node.
    This will be stored in EEPROM on AVR devices, so remains persistent between further uploads, loss of power, etc.
  **/
-#define nodeID 5
+#define nodeID 4
 
 /*** Led pin */
 int led = 4;
@@ -46,8 +49,8 @@ uint32_t displayTimer = 0;
 /*** Message structure */
 struct payload_t { 
   unsigned long nodeId;
-  char topic[32];
-  char message[32];
+  char topic[12];
+  char message[12];
 };
 
 payload_t payload;
@@ -55,13 +58,15 @@ payload_t payload;
 void setup() {
   // Set up the led pin
   pinMode(led, OUTPUT);     
+  //pinMode(PIRPIN, INPUT);     
   // Increase the payload size from default 32 to 72
-  radio.setPayloadSize(72);
-  Serial.begin(115200);
+  // radio.setPayloadSize(72);
+  // Serial.begin(115200);
   // Set the nodeID manually
   mesh.setNodeID(nodeID);
   // Connect to the mesh
-  Serial.println(F("Connecting to the mesh..."));
+  // Serial.println(F("Connecting to the mesh..."));
+  dht.begin();
   mesh.begin();
 }
 
@@ -69,24 +74,24 @@ void sendTopicAndMessage(String topic, String message) {
   payload.nodeId = nodeID;
   topic.toCharArray(payload.topic, topic.length()+1);
   message.toCharArray(payload.message, message.length()+1);
-  Serial.println(payload.nodeId);
-  Serial.println(payload.topic);
-  Serial.println(payload.message);
-  Serial.println(sizeof(payload));
-  Serial.println(F("Sending...\r\n"));
+  // Serial.println(payload.nodeId);
+  // Serial.println(payload.topic);
+  // Serial.println(payload.message);
+  // Serial.println(sizeof(payload));
+  // Serial.println(F("Sending...\r\n"));
   // Send an 'D' type message containing the current millis()
   if (!mesh.write(&payload, 'D', sizeof(payload))) {
     // If a write fails, check connectivity to the mesh network
     if ( ! mesh.checkConnection() ) {
       //refresh the network address
-      Serial.println("Renewing Address");
+      // Serial.println("Renewing Address");
       mesh.renewAddress();
-    } else {
-      Serial.println("Send fail, Test OK");
-    }
-  } else {
-    Serial.print("Send OK: "); Serial.println(displayTimer);
-  }
+    } // else {
+      // Serial.println("Send fail, Test OK");
+    // }
+  } // else {
+    // Serial.print("Send OK: "); Serial.println(displayTimer);
+  // }
 }
 
 
@@ -96,12 +101,12 @@ const float voltage_reference = 3.7; // 5.0V
 const int num_measurements = 64;
 const int voltage_pin = A0;
 float voltage_reading;
-unsigned int i, reading;
+unsigned int i, reading, presence;
 unsigned long thisNode = 1;
 String topic, message;
 
-static char hum_string[15];
-static char temp_string[15];
+static char hum_string[12];
+static char temp_string[12];
 
 long readVcc() {
   // From: https://provideyourown.com/2012/secret-arduino-voltmeter-measure-battery-voltage/
@@ -130,6 +135,18 @@ long readVcc() {
   return result; // Vcc in millivolts
 }
 
+/**
+void wakeUp()
+{
+    // Just a handler for the pin interrupt.
+    // PIR readout
+    radio.powerUp();
+    presence = digitalRead(PIRPIN);    
+    topic = "presence";
+    message = String(presence);
+    sendTopicAndMessage(topic, message);
+} */
+
 void loop() {
 
   mesh.update();
@@ -139,38 +156,54 @@ void loop() {
     // Humidity and temperature
     hum = dht.readHumidity();
     temp= dht.readTemperature();
-    dtostrf(hum, 4, 1, hum_string);
-    dtostrf(temp, 4, 1, temp_string);
 
-    // Take the voltage reading 
-    i = num_measurements;
-    reading = 0;
-    while(i--)
-      reading += analogRead(voltage_pin);
- 
-    voltage_reading = (float)reading / num_measurements * voltage_reference / 512.0;
+    if (hum > 10) {
+      dtostrf(hum, 4, 1, hum_string);
+    } else {
+      dtostrf(hum, 3, 1, hum_string);
+    }
+    if (temp > 10) {
+      dtostrf(temp, 4, 1, temp_string);
+    } else if (temp < -10) { 
+      dtostrf(temp, 5, 1, temp_string);
+    } else {
+      dtostrf(temp, 3, 1, temp_string);
+    }
     
-    topic = "temperature";
+    topic = "temp";
     message = String(temp_string);
     sendTopicAndMessage(topic, message);
+    delay(100);
 
-    topic = "humidity";
+    topic = "humi";
     message = String(hum_string);
     sendTopicAndMessage(topic, message);
-
-    topic = "battery";
+    delay(100);
+    
+    //topic = "pres";
+    //message = String(presence);
+    //sendTopicAndMessage(topic, message);
+    
+    topic = "batt";
     message = String(readVcc()/1000.0);
     sendTopicAndMessage(topic, message); 
+    delay(100);
 
   // Power down for 30 s
+  // attachInterrupt(0, wakeUp, HIGH);
   radio.powerDown();
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
+  LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
   LowPower.powerDown(SLEEP_8S, ADC_OFF, BOD_OFF);  
   LowPower.powerDown(SLEEP_4S, ADC_OFF, BOD_OFF);  
   LowPower.powerDown(SLEEP_1S, ADC_OFF, BOD_OFF);
   radio.powerUp();
-  delay(1000); // wait for a second for things to restore
+  delay(100);
+  // detachInterrupt(0); 
+  //delay(1000); // wait for a second for things to restore
 
 }
 
